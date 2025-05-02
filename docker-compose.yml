@@ -1,0 +1,56 @@
+version: '3'
+services:
+  mysql:
+    image: mysql:9-oracle
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_DATABASE=moov
+      - MYSQL_USER=moov
+      - MYSQL_PASSWORD=moov
+      - MYSQL_ROOT_PASSWORD=root
+    networks:
+      - intranet
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    tmpfs: # Run this mysql in memory as its used for testing
+      - /var/lib/mysql
+
+  spanner:
+    image: gcr.io/cloud-spanner-emulator/emulator
+    restart: always
+    ports:
+      - "9010:9010"
+      - "9020:9020"
+    networks:
+      - intranet
+
+  postgres:
+    image: postgres:17.4
+    restart: always
+    ports:
+      - "5432:5432"
+    # https://github.com/docker-library/postgres/issues/1059#issuecomment-1467077098
+    command: |
+      sh -c 'chown postgres:postgres /opt/moov/certs/*.key && chmod 0644 /opt/moov/certs/*.crt && ls -l /opt/moov/certs/ && exec docker-entrypoint.sh -c ssl=on -c ssl_cert_file=/opt/moov/certs/server.crt -c ssl_key_file=/opt/moov/certs/server.key -c ssl_ca_file=/opt/moov/certs/root.crt'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moov"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    environment:
+      - POSTGRES_DB=moov
+      - POSTGRES_USER=moov
+      - POSTGRES_PASSWORD=moov
+    networks:
+      - intranet
+    volumes:
+      - ./testcerts/root.crt:/opt/moov/certs/root.crt
+      - ./testcerts/server.crt:/opt/moov/certs/server.crt
+      - ./testcerts/server.key:/opt/moov/certs/server.key
+
+networks:
+  intranet:
